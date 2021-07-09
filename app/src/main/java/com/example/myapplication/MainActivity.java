@@ -1,6 +1,9 @@
-package com.example.clientbook;
+package com.example.myapplication;
 
+import android.os.AsyncTask;
+import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Parcelable;
 
 import androidx.appcompat.app.AppCompatActivity;
 import android.telephony.SmsManager;
@@ -9,6 +12,11 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.app.PendingIntent;
 
 import android.view.View;
 
@@ -33,15 +41,48 @@ import java.io.InputStream;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+// TODO:
+class BackendQuery {
+    public void getUrl (String urlString) {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                URL url;
+                HttpURLConnection urlConnection = null;
+                try {
+                    url = new URL(urlString);
+                    urlConnection = (HttpURLConnection) url.openConnection();
+                    InputStream in = urlConnection.getInputStream();
+                    InputStreamReader isw = new InputStreamReader(in);
+                    int data = isw.read();
+                    String jsonStr = "";
+                    while (data != -1) {
+                        char current = (char) data;
+                        data = isw.read();
+                        jsonStr += current;
+                    }
+                    JSONObject mainObject = new JSONObject(jsonStr);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    if (urlConnection != null) {
+                        urlConnection.disconnect();
+                    }
+                }
+            }
+        });
+        thread.start();
+    }
+}
+
 public class MainActivity extends AppCompatActivity {
 
     private static final int CLIENTBOOK_PERMISSIONS_REQUEST_SEND_SMS = 0;
     Button sendBtn;
-    String phone;
-    String message;
+    Boolean isError = false;
 
-    private Timer mTimer = new Timer();
-    private TimerTask mTask = new TimerTask() {
+    final private Timer mTimer = new Timer();
+    final private TimerTask mTask = new TimerTask() {
         @Override
         public void run() {
             URL url;
@@ -62,18 +103,18 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject payloadObject = mainObject.getJSONObject("payload");
                 boolean isMessage = payloadObject.getBoolean("isMessage");
                 if (isMessage) {
-                    phone = payloadObject.getString("phone");
-                    message = payloadObject.getString("message");
-                    createSmsMessage();
+                    String phone = payloadObject.getString("phone");
+                    String message = payloadObject.getString("message");
+                    createSmsMessage(phone, message);
                 } else {
                     System.out.print("No messages");
                 }
+                isError = false;
             } catch (Exception e) {
-                mTimer.cancel();
-                mTimer.purge();
-                phone = "0715009860";
-                message = "Alarm! clientbook.ru server error!";
-                createSmsMessage();
+                if (!isError) {
+                    createSmsMessage("0715009860", "Alarm! clientbook.ru server error!");
+                    isError = true;
+                }
             } finally {
                 if (urlConnection != null) {
                     urlConnection.disconnect();
@@ -91,27 +132,38 @@ public class MainActivity extends AppCompatActivity {
 
         sendBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
-                createSmsMessage();
+                createSmsMessage("0715009860", "Test message.");
             }
         });
 
-        mTimer.scheduleAtFixedRate(mTask, 3000, 5000);
+        mTimer.scheduleAtFixedRate(mTask, 3000, 10000);
     }
 
-    public void createSmsMessage () {
+    public void createSmsMessage (String phone, String message) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(MainActivity.this, new String[] {
-                Manifest.permission.SEND_SMS
+                    Manifest.permission.SEND_SMS
             }, CLIENTBOOK_PERMISSIONS_REQUEST_SEND_SMS);
         } else {
-            sendSmsMessage();
+            sendSmsMessage(phone, message);
         }
     }
 
-    public void sendSmsMessage () {
+    public void sendSmsMessage (String phone, String message) {
+        String DELIVERED = "DELIVERED";
+        PendingIntent deliveredPI = PendingIntent.getBroadcast(this, 0,
+                new Intent(DELIVERED), 0);
+        registerReceiver(
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context arg0, Intent arg1) {
+                    new BackendQuery().getUrl("https://clientbook.ru/rest/sms/sentSuccess?auth=clientbook_secret&phone=" + phone);
+                }
+            },
+            new IntentFilter(DELIVERED)
+        );
         SmsManager smsManager = SmsManager.getDefault();
-        smsManager.sendTextMessage(phone, null, message, null, null);
-        // Toast.makeText(getApplicationContext(), "SMS sent.", Toast.LENGTH_LONG).show();
+        smsManager.sendTextMessage(phone, null, message, null, deliveredPI);
     }
 
     @Override
@@ -119,10 +171,10 @@ public class MainActivity extends AppCompatActivity {
         switch (requestCode) {
             case CLIENTBOOK_PERMISSIONS_REQUEST_SEND_SMS: {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    sendSmsMessage();
+                    // sendSmsMessage();
                 } else {
-                    String errMsg = "SMS faild, please try again.";
-                    // Toast.makeText(getApplicationContext(), errMsg, Toast.LENGTH_LONG).show();
+                    String errMsg = "SMS failed, please try again.";
+                    Toast.makeText(getApplicationContext(), errMsg, Toast.LENGTH_LONG).show();
                 }
                 return;
             }

@@ -130,10 +130,8 @@ public class MainActivity extends AppCompatActivity {
 
         sendBtn = (Button) findViewById(R.id.btnSendSMS);
 
-        sendBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                createSmsMessage("0715009860", "Test message.");
-            }
+        sendBtn.setOnClickListener(view -> {
+            createSmsMessage("0715009860", "Test message.");
         });
 
         mTimer.scheduleAtFixedRate(mTask, 3000, 10000);

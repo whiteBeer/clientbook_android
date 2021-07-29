@@ -105,14 +105,17 @@ public class MainActivity extends AppCompatActivity {
                 if (isMessage) {
                     String phone = payloadObject.getString("phone");
                     String message = payloadObject.getString("message");
-                    createSmsMessage(phone, message);
+                    String smsId = payloadObject.getString("smsId");
+                    createSmsMessage(phone, message, smsId);
                 } else {
                     System.out.print("No messages");
                 }
                 isError = false;
+            } catch (java.net.UnknownHostException e) {
+                System.out.println("Wi-fi problem");
             } catch (Exception e) {
                 if (!isError) {
-                    createSmsMessage("0715009860", "Alarm! clientbook.ru server error!");
+                    createSmsMessage("0715009860", "Alarm! clientbook.ru server error!", "");
                     isError = true;
                 }
             } finally {
@@ -131,23 +134,23 @@ public class MainActivity extends AppCompatActivity {
         sendBtn = (Button) findViewById(R.id.btnSendSMS);
 
         sendBtn.setOnClickListener(view -> {
-            createSmsMessage("0715009860", "Test message.");
+            createSmsMessage("0715009860", "Test message.", "");
         });
 
         mTimer.scheduleAtFixedRate(mTask, 3000, 10000);
     }
 
-    public void createSmsMessage (String phone, String message) {
+    public void createSmsMessage (String phone, String message, String smsId) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(MainActivity.this, new String[] {
                     Manifest.permission.SEND_SMS
             }, CLIENTBOOK_PERMISSIONS_REQUEST_SEND_SMS);
         } else {
-            sendSmsMessage(phone, message);
+            sendSmsMessage(phone, message, smsId);
         }
     }
 
-    public void sendSmsMessage (String phone, String message) {
+    public void sendSmsMessage (String phone, String message, String smsId) {
         String DELIVERED = "DELIVERED";
         PendingIntent deliveredPI = PendingIntent.getBroadcast(this, 0,
                 new Intent(DELIVERED), 0);
@@ -155,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
             new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context arg0, Intent arg1) {
-                    new BackendQuery().getUrl("https://clientbook.ru/rest/sms/sentSuccess?auth=clientbook_secret&phone=" + phone);
+                    new BackendQuery().getUrl("https://clientbook.ru/rest/sms/sentSuccess?auth=clientbook_secret&smsId=" + smsId);
                 }
             },
             new IntentFilter(DELIVERED)

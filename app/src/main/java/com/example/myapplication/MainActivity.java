@@ -159,6 +159,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onReceive(Context arg0, Intent arg1) {
                     new BackendQuery().getUrl("https://clientbook.ru/rest/sms/sentSuccess?auth=clientbook_secret&smsId=" + smsId);
+                    unregisterReceiver(this);
                 }
             },
             new IntentFilter(DELIVERED)
